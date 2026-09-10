@@ -16,6 +16,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import BackgroundTasks, FastAPI, Header, Request, Response
 
@@ -27,6 +28,12 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Auto API-Doc Sync Agent", version="2.0")
 
+# Render injects RENDER_GIT_COMMIT on every deploy; fall back to a generic
+# env var (or "unknown") so the endpoint works on any host / locally.
+DEPLOYED_COMMIT = (
+    os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "unknown"
+)
+
 
 @app.get("/")
 @app.get("/healthz")
@@ -34,6 +41,7 @@ def health() -> dict:
     return {
         "service": "auto-api-doc-sync",
         "status": "ok",
+        "commit": DEPLOYED_COMMIT[:7] if DEPLOYED_COMMIT != "unknown" else "unknown",
         "github_app_configured": config.has_github_app,
         "webhook_secret_configured": bool(config.github_webhook_secret),
         "gemini_configured": config.has_gemini,
