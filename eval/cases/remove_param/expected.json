@@ -1,0 +1,2 @@
+{"description": "remove a param from a public function",
+ "expected": [{"status": "changed", "key": "func search"}]}

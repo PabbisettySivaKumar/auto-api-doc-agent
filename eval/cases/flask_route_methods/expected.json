@@ -1,0 +1,2 @@
+{"description": "Flask route (methods=) gains a param",
+ "expected": [{"status": "changed", "key": "route POST /items"}]}

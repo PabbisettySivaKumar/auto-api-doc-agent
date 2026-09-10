@@ -1,0 +1,2 @@
+{"description": "remove a DELETE endpoint",
+ "expected": [{"status": "removed", "key": "route DELETE /items/{item_id}"}]}

@@ -1,0 +1,2 @@
+{"description": "docstring changed on a public function (doc-relevant)",
+ "expected": [{"status": "changed", "key": "func compute"}]}

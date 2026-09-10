@@ -95,3 +95,22 @@ Full deployment + GitHub App creation/installation steps are in
 ```bash
 python3 tests/test_service.py   # signature + webhook dispatch
 ```
+
+## Eval suite (PRD Phase 2)
+
+A labeled test set of "PRs" scores detection accuracy against the PRD
+success metric ("≥ 90% of API-surface-relevant changes detected").
+
+```bash
+python3 run_eval.py           # scorecard + out/eval_report.json (exit != 0 if below target)
+python3 run_eval.py --json    # machine-readable
+```
+
+- `eval/cases/<name>/` — each case has `before.py`, `after.py`, and
+  `expected.json` (labeled `status`/`key` changes). Includes negative
+  cases (private-helper edits, implementation-only diffs) that must
+  produce **no** detections.
+- `eval/harness.py` — runs the detector per case, computes precision /
+  recall / F1 and per-case exact-match.
+
+Current: **12/12 cases, recall 100%** (target 90%).

@@ -1,0 +1,2 @@
+{"description": "add optional query param to GET route",
+ "expected": [{"status": "changed", "key": "route GET /users/{user_id}"}]}

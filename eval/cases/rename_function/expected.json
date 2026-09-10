@@ -1,0 +1,3 @@
+{"description": "rename a public helper function",
+ "expected": [{"status": "removed", "key": "func format_user"},
+              {"status": "added", "key": "func render_user"}]}
