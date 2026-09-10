@@ -5,18 +5,33 @@ An autonomous agent that watches a codebase for **API-surface changes**
 **targeted documentation edits** — always via a pull request, never an
 auto-commit to `main`.
 
+## Status — complete & live
+
+The full PRD is built, deployed, and verified end-to-end on real pushes.
+
+| PRD Phase | Scope | Status |
+|---|---|---|
+| Phase 1 | MVP agent core (single language, in-repo docs) | ✅ |
+| Phase 2 | Structured logging + scored eval suite | ✅ |
+| Phase 3 | RAG for scattered/external docs (LangGraph deferred) | ✅ |
+| Phase 4 | Multi-language (Python + JS/TS) | ✅ |
+| — | AI Studio → Vertex AI migration | ⬜ intentionally skipped (stays on AI Studio) |
+
+- **Deployed:** always-on GitHub App + FastAPI service on Render (free
+  plan), installed across all repos.
+- **Live-verified:** opened & merged real doc-sync PRs for both a **Python**
+  and a **JavaScript** repo (`model: gemini`, confidence 1.00).
+- **Quality gate:** eval suite at **18/18 cases, recall 100%** (target 90%).
+- **Zero-cost, zero heavy deps:** no paid services, no numpy/Chroma/tree-sitter.
+
 **Languages:** Python (`ast`) and JavaScript/TypeScript (heuristic).
 **Docs:** Markdown + OpenAPI, in-repo or external (RAG).
 **Delivery:** run locally, or as an always-on GitHub App across all repos.
 
-PRD roadmap status: Phase 1 (MVP) ✅ · Phase 2 (eval suite) ✅ ·
-Phase 3 (RAG; LangGraph deferred) ✅ · Phase 4 (multi-language ✅;
-Vertex AI intentionally skipped — stays on AI Studio).
-
 ## Pipeline
 
 ```
-diff → detect API changes (ast) → retrieve relevant docs
+diff → detect API changes (Python ast / JS-TS) → retrieve relevant docs (direct | RAG)
      → draft edits (Gemini | stub) → self-check → deliver (PR) → log trajectory
 ```
 
@@ -66,11 +81,12 @@ python3 run_local.py --repo /path/to/repo --live
 A PR is only opened when confidence ≥ `CONFIDENCE_THRESHOLD` (default 0.6);
 below that the run is flagged for manual review and written to `out/` only.
 
-## Phase 2 — all repos, automatically (built)
+## Deployment — all repos, automatically
 
 The same core is wrapped in a **FastAPI webhook service** + a **GitHub
 App** installed once across your account, so **every repo** (including
 future ones) gets doc PRs automatically — no per-repo workflow file.
+Currently deployed on Render's free plan (see `deploy/SETUP.md`).
 
 ```
 Any repo → push → GitHub App → FastAPI service (service/webhook.py)
@@ -97,10 +113,15 @@ curl localhost:8000/          # health + config status
 ```
 
 Full deployment + GitHub App creation/installation steps are in
-**`deploy/SETUP.md`**. Tests:
+**`deploy/SETUP.md`**.
+
+## Tests & eval
 
 ```bash
-python3 tests/test_service.py   # signature + webhook dispatch
+python3 tests/test_service.py     # webhook signature + dispatch
+python3 tests/test_rag.py         # RAG retrieval (offline, deterministic)
+python3 tests/test_detect_js.py   # JS/TS detector
+python3 run_eval.py               # 18-case accuracy scorecard (exit != 0 below target)
 ```
 
 ## Eval suite (PRD Phase 2)
@@ -113,14 +134,14 @@ python3 run_eval.py           # scorecard + out/eval_report.json (exit != 0 if b
 python3 run_eval.py --json    # machine-readable
 ```
 
-- `eval/cases/<name>/` — each case has `before.py`, `after.py`, and
-  `expected.json` (labeled `status`/`key` changes). Includes negative
-  cases (private-helper edits, implementation-only diffs) that must
-  produce **no** detections.
-- `eval/harness.py` — runs the detector per case, computes precision /
-  recall / F1 and per-case exact-match.
+- `eval/cases/<name>/` — each case has `before.*`, `after.*` (any language
+  — `.py`, `.js`, `.ts`) and `expected.json` (labeled `status`/`key`
+  changes). Includes negative cases (private-helper edits,
+  implementation-only diffs) that must produce **no** detections.
+- `eval/harness.py` — routes each case to its language detector, computes
+  precision / recall / F1 and per-case exact-match.
 
-Current: **12/12 cases, recall 100%** (target 90%).
+Current: **18/18 cases (12 Python + 6 JS/TS), recall 100%** (target 90%).
 
 ## RAG for scattered / external docs (PRD Phase 3)
 
