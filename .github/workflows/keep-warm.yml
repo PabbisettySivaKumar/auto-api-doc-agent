@@ -1,9 +1,13 @@
 name: keep-warm
 
-# Pings the Render service's health endpoint so the FREE-plan instance
-# never idles into a spin-down (Render sleeps after ~15 min of no traffic).
-# Runs every 10 minutes, which is < the 15-min sleep window even with the
-# usual GitHub-cron drift.
+# Two jobs:
+#  1. Pings /healthz so the Render FREE-plan instance never idles into a
+#     spin-down (Render sleeps after ~15 min of no traffic). Runs every 10
+#     minutes, < the 15-min sleep window even with the usual cron drift.
+#  2. Asserts the deployed commit (reported by /healthz) matches this repo's
+#     current commit — a lightweight drift monitor. This is a soft check: it
+#     emits a warning (not a failure) on mismatch, since a brief lag is
+#     normal during the ~2-4 min Render deploy window.
 #
 # Setup: add a repo VARIABLE named RENDER_SERVICE_URL (Settings → Secrets
 # and variables → Actions → Variables) set to your service base URL, e.g.
@@ -21,19 +25,35 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping /healthz
+      - name: Ping /healthz and assert deployed commit
         run: |
           URL="${{ vars.RENDER_SERVICE_URL }}"
           if [ -z "$URL" ]; then
             echo "RENDER_SERVICE_URL variable is not set; skipping." >&2
             exit 0
           fi
+
           # Retry a few times: the first hit may be the one that wakes it.
+          body=""
           for i in 1 2 3 4 5; do
-            code=$(curl -fsS -o /dev/null -w "%{http_code}" --max-time 60 "$URL/healthz") && {
-              echo "ping OK ($code)"; exit 0;
-            }
+            body=$(curl -fsS --max-time 60 "$URL/healthz") && break
             echo "attempt $i failed, retrying in 15s..."; sleep 15
+            body=""
           done
-          echo "service did not respond after retries" >&2
-          exit 1
+          if [ -z "$body" ]; then
+            echo "service did not respond after retries" >&2
+            exit 1
+          fi
+          echo "ping OK: $body"
+
+          # Compare the commit reported by /healthz to this repo's SHA.
+          deployed=$(echo "$body" | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)
+          expected=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          if [ -z "$deployed" ] || [ "$deployed" = "unknown" ]; then
+            echo "::warning::/healthz did not report a commit (older deploy?)."
+          elif [ "$deployed" != "$expected" ]; then
+            echo "::warning::deploy drift — live commit '$deployed' != repo '$expected' (deploy lag or failed deploy)."
+          else
+            echo "deploy up to date: $deployed"
+          fi
