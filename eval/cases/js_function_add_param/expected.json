@@ -1,0 +1,2 @@
+{"description": "exported function gains a param",
+ "expected": [{"status": "changed", "key": "func getUser"}]}

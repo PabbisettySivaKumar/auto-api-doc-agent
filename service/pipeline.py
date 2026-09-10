@@ -49,10 +49,9 @@ def run_for_push(
         file_changes = diff.changes_from_git(tmp, before_sha, after_sha)
         changes: list[detect.Change] = []
         for fc in file_changes:
-            if fc.is_python:
-                changes.extend(
-                    detect.detect_file_changes(fc.old_content, fc.new_content)
-                )
+            changes.extend(
+                detect.detect_changes(fc.path, fc.old_content, fc.new_content)
+            )
 
         if not changes:
             result = {"repo": full_name, "result": "no-api-changes"}

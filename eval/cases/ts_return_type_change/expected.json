@@ -1,0 +1,2 @@
+{"description": "TypeScript function return type changes",
+ "expected": [{"status": "changed", "key": "func total"}]}

@@ -1,0 +1,2 @@
+{"description": "arrow function bound to const gains a param",
+ "expected": [{"status": "changed", "key": "func sum"}]}

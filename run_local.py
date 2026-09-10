@@ -59,12 +59,12 @@ def main() -> None:
 
     file_changes, docs_root = _gather_changes(args)
 
-    # 1. Detect API-surface changes across all changed Python files.
+    # 1. Detect API-surface changes across all changed files (any language).
     all_changes: list[detect.Change] = []
     for fc in file_changes:
-        if not fc.is_python:
-            continue
-        all_changes.extend(detect.detect_file_changes(fc.old_content, fc.new_content))
+        all_changes.extend(
+            detect.detect_changes(fc.path, fc.old_content, fc.new_content)
+        )
 
     print(f"\n=== Auto API-Doc Sync Agent (Phase 1) ===")
     print(f"Changed files: {len(file_changes)} | API changes: {len(all_changes)}")

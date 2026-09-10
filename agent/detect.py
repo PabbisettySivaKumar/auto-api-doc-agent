@@ -222,5 +222,24 @@ def diff_symbols(
 def detect_file_changes(
     old_source: str | None, new_source: str | None
 ) -> list[Change]:
-    """Full pipeline for one file: extract both sides, diff, classify."""
+    """Full pipeline for one Python file: extract both sides, diff, classify."""
     return diff_symbols(extract_symbols(old_source), extract_symbols(new_source))
+
+
+def detect_changes(
+    path: str, old_source: str | None, new_source: str | None
+) -> list[Change]:
+    """Language-dispatching entry point: route a file to its detector.
+
+    Python uses the stdlib `ast` detector here; JS/TS uses the heuristic
+    detector in `detect_js`. Unsupported file types yield no changes, so
+    callers can pass every changed file blindly.
+    """
+    if path.endswith(".py"):
+        return detect_file_changes(old_source, new_source)
+
+    from . import detect_js  # lazy import avoids a module cycle
+
+    if detect_js.is_js(path):
+        return detect_js.detect_file_changes(old_source, new_source)
+    return []

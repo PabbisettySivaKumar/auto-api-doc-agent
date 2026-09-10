@@ -94,8 +94,12 @@ class Scorecard:
         return sum(1 for c in self.cases if c.passed)
 
 
-def _read(path: Path) -> str | None:
-    return path.read_text() if path.exists() else None
+def _find(case_dir: Path, stem: str) -> Path | None:
+    """Locate before.* / after.* regardless of language extension."""
+    for p in sorted(case_dir.glob(f"{stem}.*")):
+        if p.suffix != ".json":
+            return p
+    return None
 
 
 def run_case(case_dir: Path) -> CaseResult:
@@ -104,9 +108,14 @@ def run_case(case_dir: Path) -> CaseResult:
         (e["status"], e["key"]) for e in spec.get("expected", [])
     }
 
-    before = _read(case_dir / "before.py")
-    after = _read(case_dir / "after.py")
-    changes = detect.detect_file_changes(before, after)
+    before_file = _find(case_dir, "before")
+    after_file = _find(case_dir, "after")
+    present = after_file or before_file
+    # The dispatcher routes by the file's extension (e.g. after.ts -> JS/TS).
+    path = present.name if present else "x.py"
+    before = before_file.read_text() if before_file else None
+    after = after_file.read_text() if after_file else None
+    changes = detect.detect_changes(path, before, after)
     detected: set[Label] = {(c.status, c.key) for c in changes}
 
     return CaseResult(

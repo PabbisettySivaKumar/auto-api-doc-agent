@@ -1,0 +1,2 @@
+{"description": "class method signature changes",
+ "expected": [{"status": "changed", "key": "func UserAPI.list"}]}

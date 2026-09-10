@@ -1,0 +1,2 @@
+{"description": "Express router gains a DELETE endpoint",
+ "expected": [{"status": "added", "key": "route DELETE /users/:id"}]}

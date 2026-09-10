@@ -1,12 +1,17 @@
-# Auto API-Doc Sync Agent — Phase 1
+# Auto API-Doc Sync Agent
 
 An autonomous agent that watches a codebase for **API-surface changes**
 (endpoints, function signatures, request/response shapes) and proposes
 **targeted documentation edits** — always via a pull request, never an
 auto-commit to `main`.
 
-This is Phase 1 (single language: **Python**; docs: **Markdown + OpenAPI**;
-no RAG, no orchestration framework), runnable locally with zero setup.
+**Languages:** Python (`ast`) and JavaScript/TypeScript (heuristic).
+**Docs:** Markdown + OpenAPI, in-repo or external (RAG).
+**Delivery:** run locally, or as an always-on GitHub App across all repos.
+
+PRD roadmap status: Phase 1 (MVP) ✅ · Phase 2 (eval suite) ✅ ·
+Phase 3 (RAG; LangGraph deferred) ✅ · Phase 4 (multi-language ✅;
+Vertex AI intentionally skipped — stays on AI Studio).
 
 ## Pipeline
 
@@ -18,7 +23,8 @@ diff → detect API changes (ast) → retrieve relevant docs
 | Module | Role |
 |---|---|
 | `agent/diff.py` | Get changed files (local git or explicit file pair) |
-| `agent/detect.py` | Extract & diff API surface via Python `ast` |
+| `agent/detect.py` | Extract & diff API surface via Python `ast`; `detect_changes()` dispatches by language |
+| `agent/detect_js.py` | JS/TS API-surface detection (heuristic, zero-dep) |
 | `agent/retrieve.py` | Find Markdown / OpenAPI docs that reference changed symbols |
 | `agent/draft.py` | Draft minimal doc edits with Gemini (stub fallback if no key) |
 | `agent/selfcheck.py` | Ground the edits against the code; adjust confidence |
