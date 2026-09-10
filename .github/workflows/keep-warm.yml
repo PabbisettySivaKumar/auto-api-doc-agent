@@ -1,0 +1,39 @@
+name: keep-warm
+
+# Pings the Render service's health endpoint so the FREE-plan instance
+# never idles into a spin-down (Render sleeps after ~15 min of no traffic).
+# Runs every 10 minutes, which is < the 15-min sleep window even with the
+# usual GitHub-cron drift.
+#
+# Setup: add a repo VARIABLE named RENDER_SERVICE_URL (Settings → Secrets
+# and variables → Actions → Variables) set to your service base URL, e.g.
+#   https://auto-api-doc-agent.onrender.com
+#
+# Note: GitHub disables scheduled workflows after 60 days of no repo
+# activity — push anything (or run this manually) to keep it enabled.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /healthz
+        run: |
+          URL="${{ vars.RENDER_SERVICE_URL }}"
+          if [ -z "$URL" ]; then
+            echo "RENDER_SERVICE_URL variable is not set; skipping." >&2
+            exit 0
+          fi
+          # Retry a few times: the first hit may be the one that wakes it.
+          for i in 1 2 3 4 5; do
+            code=$(curl -fsS -o /dev/null -w "%{http_code}" --max-time 60 "$URL/healthz") && {
+              echo "ping OK ($code)"; exit 0;
+            }
+            echo "attempt $i failed, retrying in 15s..."; sleep 15
+          done
+          echo "service did not respond after retries" >&2
+          exit 1

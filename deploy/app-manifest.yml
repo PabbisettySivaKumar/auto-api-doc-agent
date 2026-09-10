@@ -1,0 +1,31 @@
+# GitHub App manifest for the Auto API-Doc Sync Agent.
+#
+# You can create the App from this manifest instead of clicking through
+# every field. See deploy/SETUP.md for the exact steps. After creation,
+# GitHub gives you an App ID, a private key (.pem), and lets you set the
+# webhook secret — put those in your .env / host secrets.
+
+name: Auto API-Doc Sync Agent
+description: >-
+  Watches repos for API-surface changes and opens PRs that keep the
+  documentation in sync. Never commits to the default branch directly.
+url: https://github.com/your-org/auto-api-doc-agent
+public: false
+
+# Where GitHub delivers webhooks. Replace with your deployed service URL.
+hook_attributes:
+  url: https://YOUR-SERVICE-HOST/webhook
+  active: true
+
+# Only the events we handle.
+default_events:
+  - push
+
+# Least-privilege permissions.
+default_permissions:
+  contents: write        # read code + create the doc branch/commits
+  pull_requests: write   # open the doc PR
+  metadata: read         # required baseline
+
+# Install on the whole account (all current + future repos) or pick repos
+# at install time — that choice is made in the GitHub UI during install.

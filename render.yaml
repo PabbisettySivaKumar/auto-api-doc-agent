@@ -1,0 +1,39 @@
+# Render Blueprint — one-click deploy of the webhook service on the FREE plan.
+#
+# In Render: New → Blueprint → connect this repo. Render reads this file,
+# builds the Docker image, and creates the service. You then fill in the
+# secret env vars (marked `sync: false`) and add the private key as a
+# Secret File in the dashboard. Full steps: deploy/SETUP.md (Render section).
+
+services:
+  - type: web
+    name: auto-api-doc-agent
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    # Render pings this during/after deploy; it does NOT prevent free-plan
+    # spin-down on inactivity — the keep-warm workflow handles that.
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # --- secrets: set these in the Render dashboard, not in git ---
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # --- private key: added as a Render "Secret File" (see SETUP.md) ---
+      # Render mounts Secret Files under /etc/secrets/<filename>.
+      - key: GITHUB_APP_PRIVATE_KEY_PATH
+        value: /etc/secrets/app-private-key.pem
+
+      # --- non-secret config ---
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.6"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: OUTPUT_DIR
+        value: /tmp/out

@@ -1,0 +1,21 @@
+# Core runtime deps for the Auto API-Doc Sync Agent (Phase 1)
+
+# GitHub access: fetch diffs and open PRs
+PyGithub>=2.3.0
+
+# Gemini API (Google AI Studio). The agent degrades to a deterministic
+# stub if this is missing or GEMINI_API_KEY is unset, so it is optional
+# for dry-run testing.
+google-genai>=0.3.0
+
+# OpenAPI spec parsing / validation
+PyYAML>=6.0
+
+# Load config from a .env file during local development
+python-dotenv>=1.0.0
+
+# --- Phase 2: webhook service (GitHub App, all repos) ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+# PyJWT is used by PyGithub for GitHub App JWT signing
+PyJWT[crypto]>=2.8.0
