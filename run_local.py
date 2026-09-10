@@ -43,6 +43,14 @@ def main() -> None:
     parser.add_argument("--logical-path", default="api.py")
     parser.add_argument("--docs-root", default="fixtures")
     parser.add_argument(
+        "--external-docs",
+        default=None,
+        help="comma-separated dirs of docs outside the repo (enables RAG)",
+    )
+    parser.add_argument(
+        "--rag", action="store_true", help="force RAG retrieval"
+    )
+    parser.add_argument(
         "--live",
         action="store_true",
         help="open a real PR (requires GITHUB_TOKEN + GITHUB_REPO)",
@@ -68,9 +76,17 @@ def main() -> None:
         log.log_run(config.output_dir, {"result": "no-api-changes"})
         return
 
-    # 2. Retrieve relevant docs.
-    matches = retrieve.relevant_docs(docs_root, all_changes)
-    print(f"\nRelevant docs: {len(matches)}")
+    # 2. Retrieve relevant docs (auto-selects direct vs. RAG).
+    external = args.external_docs.split(",") if args.external_docs else None
+    matches = retrieve.relevant_docs_auto(
+        docs_root,
+        all_changes,
+        config,
+        external_docs_dirs=external,
+        force_rag=True if args.rag else None,
+    )
+    mode = "RAG" if (args.rag or external) else "auto"
+    print(f"\nRelevant docs ({mode}): {len(matches)}")
     for m in matches:
         print(f"  {m.doc.path} (score {m.score}, matched {m.matched_terms})")
 

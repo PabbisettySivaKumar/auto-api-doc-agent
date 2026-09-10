@@ -59,7 +59,10 @@ def run_for_push(
             log.log_run(cfg.output_dir, result)
             return result
 
-        matches = retrieve.relevant_docs(tmp, changes)
+        external = [cfg.external_docs_dir] if cfg.external_docs_dir else None
+        matches = retrieve.relevant_docs_auto(
+            tmp, changes, cfg, external_docs_dirs=external
+        )
         drafted = draft.draft_edits(changes, matches, cfg)
         checked = selfcheck.check(drafted, changes)
         confidence = checked.adjusted_confidence

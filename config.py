@@ -49,6 +49,16 @@ class Config:
     # Where dry-run output and trajectory logs are written.
     output_dir: str = os.getenv("OUTPUT_DIR", "out")
 
+    # --- RAG (Phase 3: large / scattered / external docs) ---
+    gemini_embed_model: str = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+    # Directory of docs living outside the repo (exported Confluence/Notion,
+    # etc.). If set, RAG retrieval is used.
+    external_docs_dir: str | None = os.getenv("EXTERNAL_DOCS_DIR")
+    # Auto-switch to RAG once the in-repo doc corpus reaches this many files.
+    rag_min_docs: int = int(os.getenv("RAG_MIN_DOCS", "25"))
+    rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
+    rag_force: bool = os.getenv("RAG_FORCE", "").lower() in {"1", "true", "yes"}
+
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)

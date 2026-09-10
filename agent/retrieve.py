@@ -68,17 +68,15 @@ def find_docs(repo_path: str) -> list[DocFile]:
     return docs
 
 
-def relevant_docs(
-    repo_path: str, changes: list[Change]
-) -> list[DocMatch]:
-    """Rank docs by how many changed symbols they reference."""
+def _match_direct(docs: list[DocFile], changes: list[Change]) -> list[DocMatch]:
+    """Substring matching: rank docs by how many changed symbols they name."""
     terms: list[str] = []
     for c in changes:
         terms.extend(_terms_for_change(c))
     terms = list(dict.fromkeys(terms))  # de-dup, keep order
 
     matches: list[DocMatch] = []
-    for doc in find_docs(repo_path):
+    for doc in docs:
         hay = doc.content.lower()
         hit = [t for t in terms if t.lower() in hay]
         if hit:
@@ -86,3 +84,40 @@ def relevant_docs(
 
     matches.sort(key=lambda m: m.score, reverse=True)
     return matches
+
+
+def relevant_docs(repo_path: str, changes: list[Change]) -> list[DocMatch]:
+    """Direct (substring) retrieval over in-repo docs. Phase 1 default."""
+    return _match_direct(find_docs(repo_path), changes)
+
+
+def relevant_docs_auto(
+    repo_path: str,
+    changes: list[Change],
+    cfg=None,
+    external_docs_dirs: list[str] | None = None,
+    force_rag: bool | None = None,
+) -> list[DocMatch]:
+    """Choose direct vs. RAG retrieval, then retrieve.
+
+    Uses RAG (semantic embeddings) when docs are scattered/external or the
+    corpus is large; otherwise falls back to fast substring matching. RAG
+    is a strict superset in capability but costs an embedding pass, so we
+    only reach for it when it earns its keep (PRD Phase 3).
+    """
+    docs = find_docs(repo_path)
+    for d in external_docs_dirs or []:
+        docs += find_docs(d)
+
+    if force_rag is None:
+        force_rag = bool(cfg and getattr(cfg, "rag_force", False))
+    min_docs = getattr(cfg, "rag_min_docs", 25) if cfg else 25
+    has_external = bool(external_docs_dirs)
+
+    use_rag = force_rag or has_external or len(docs) >= min_docs
+    if use_rag:
+        from . import rag  # lazy import avoids a module cycle
+
+        k = getattr(cfg, "rag_top_k", 4) if cfg else 4
+        return rag.relevant_docs_over(docs, changes, cfg, k=k)
+    return _match_direct(docs, changes)
