@@ -51,6 +51,9 @@ class Change:
     before: Symbol | None = None
     after: Symbol | None = None
     details: list[str] = field(default_factory=list)
+    # Repo-relative path of the file this change came from. Populated by
+    # detect_changes so downstream feature-bucketing knows the folder.
+    file: str = ""
 
     def describe(self) -> str:
         sym = self.after or self.before
@@ -236,10 +239,15 @@ def detect_changes(
     callers can pass every changed file blindly.
     """
     if path.endswith(".py"):
-        return detect_file_changes(old_source, new_source)
+        changes = detect_file_changes(old_source, new_source)
+    else:
+        from . import detect_js  # lazy import avoids a module cycle
 
-    from . import detect_js  # lazy import avoids a module cycle
+        if detect_js.is_js(path):
+            changes = detect_js.detect_file_changes(old_source, new_source)
+        else:
+            return []
 
-    if detect_js.is_js(path):
-        return detect_js.detect_file_changes(old_source, new_source)
-    return []
+    for c in changes:
+        c.file = path
+    return changes

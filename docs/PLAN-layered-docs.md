@@ -40,11 +40,11 @@ change). D is the only phase touching live GitHub. Keep the existing single-
 `API.md` behavior behind a `DOC_MODE=single|layered` flag until layered is
 proven on one repo.
 
-### Phase A — Feature bucketing
+### Phase A — Feature bucketing ✅ DONE
 - New `agent/features.py`: `resolve_feature(path)`, `feature_display_name`,
   `bucket_changes(changes) -> {feature: [Change]}`; `features.yml` override.
 - Stamp `Change.file` in `detect.detect_changes` so bucketing knows the folder.
-- `tests/test_features.py`.
+- `tests/test_features.py` — all pass; no regressions in eval/detect/service.
 
 ### Phase B — Call-graph extraction (grounds diagrams)
 - New `agent/callgraph.py`: Python `ast` who-calls-whom; JS/TS heuristic;
