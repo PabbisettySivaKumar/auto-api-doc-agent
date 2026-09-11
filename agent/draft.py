@@ -29,6 +29,9 @@ class DraftResult:
     summary: str = ""
     confidence: float = 0.0
     used_model: bool = False
+    # Human-readable provider label for the PR body. When empty, the body
+    # falls back to "gemini"/"stub" from `used_model`.
+    provider: str = ""
 
 
 _SYSTEM = """You are a documentation-sync agent. You are given a set of

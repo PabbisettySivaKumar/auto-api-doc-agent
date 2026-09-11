@@ -23,7 +23,7 @@ def _pr_body(draft: DraftResult, check: CheckResult, confidence: float) -> str:
         draft.summary or "Proposed documentation updates for recent API changes.",
         "",
         f"**Confidence:** {confidence:.2f}  "
-        f"(model: {'gemini' if draft.used_model else 'stub'})",
+        f"(model: {draft.provider or ('gemini' if draft.used_model else 'stub')})",
         "",
         "### Files updated",
     ]

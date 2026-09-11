@@ -138,6 +138,10 @@ def deliver_backfill_pr(repo, base_branch: str, result: BackfillResult) -> str |
             "structural descriptions."
         )
     draft = DraftResult(
-        edits=result.edits, summary=summary, confidence=1.0, used_model=result.used_model
+        edits=result.edits,
+        summary=summary,
+        confidence=1.0,
+        used_model=result.used_model,
+        provider="local (ollama) — no cloud",
     )
     return pr.open_pr(repo, base_branch, draft, CheckResult(), 1.0)
