@@ -42,6 +42,7 @@ def health() -> dict:
         "service": "auto-api-doc-sync",
         "status": "ok",
         "commit": DEPLOYED_COMMIT[:7] if DEPLOYED_COMMIT != "unknown" else "unknown",
+        "doc_mode": config.doc_mode,
         "github_app_configured": config.has_github_app,
         "webhook_secret_configured": bool(config.github_webhook_secret),
         "gemini_configured": config.has_gemini,
