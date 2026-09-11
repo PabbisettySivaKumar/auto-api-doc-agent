@@ -68,6 +68,14 @@ class Config:
     # Directory prefix stripped before resolving a feature (e.g. "src").
     source_root: str = os.getenv("SOURCE_ROOT", "")
 
+    # --- Backfill / local model (Phase F) ---
+    # Old repos without docs are documented via a LOCAL model only, never
+    # Gemini (see agent/llm.py mode routing).
+    ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+    # Cap on LLM-described symbols per backfill run (cost/scope guard).
+    backfill_symbol_cap: int = int(os.getenv("BACKFILL_SYMBOL_CAP", "200"))
+
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)

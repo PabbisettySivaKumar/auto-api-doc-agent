@@ -149,6 +149,43 @@ stays active as a safety net.
 just that repo, or use a throwaway), confirm the doc commit appears on a PR,
 then widen. Roll back anytime by setting `DOC_MODE=single`.
 
+## 7. Backfill old repos (local model, runs on your Mac)
+
+The live service documents **changes**; repos whose code already exists get
+nothing until touched. To document an old repo's **whole** API surface, use
+the local backfill app — it runs on your machine next to Ollama, uses a
+**local model only**, and has no Gemini surface, so old repos can never be
+sent to the cloud.
+
+1. **Install + start Ollama, pull the model:**
+   ```bash
+   brew install ollama
+   ollama serve                    # background
+   ollama pull qwen2.5-coder:7b    # or :3b on 8GB RAM
+   ```
+2. **Local `.env`** (project root) needs the GitHub App creds so it can list
+   your installed repos and open PRs:
+   ```
+   GITHUB_APP_ID=...
+   GITHUB_APP_PRIVATE_KEY_PATH=./app-private-key.pem
+   OLLAMA_MODEL=qwen2.5-coder:7b
+   ```
+   (No `GEMINI_API_KEY` needed — backfill never uses it.)
+3. **Run the local app:**
+   ```bash
+   uvicorn backfill_app:app --port 8100
+   ```
+   Open http://localhost:8100/docs.
+4. In `/docs`: `GET /repos` lists the repos the App is installed on (each
+   flagged if it already has `docs/API.md`). Then `POST /backfill` → pick a
+   repo from the **dropdown** → it clones, documents the whole API surface
+   with the local model, and opens **one docs PR** to the default branch.
+   Re-run a documented repo with `force=true`.
+
+Notes: backfill opens a normal PR (never commits to the default branch
+directly); a symbol cap (`BACKFILL_SYMBOL_CAP`, default 200) bounds cost by
+falling back to structural descriptions past the cap.
+
 ## Notes
 
 - Low-confidence runs (below `CONFIDENCE_THRESHOLD`) are logged but do

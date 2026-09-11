@@ -152,13 +152,18 @@ def _key_internals(graph: CallGraph, public: list[FuncNode]) -> list[FuncNode]:
     return list(internals.values())
 
 
-def _describe(cfg, feature_name: str, node: FuncNode) -> str:
-    """One-line description of a symbol; LLM-enriched when available."""
+def _describe(cfg, feature_name: str, node: FuncNode, mode: str = llm.INCREMENTAL) -> str:
+    """One-line description of a symbol; LLM-enriched when available.
+
+    `mode` selects the provider: "backfill" uses the local model only,
+    "incremental" uses Gemini (see agent/llm.py).
+    """
     text = llm.generate_text(
         cfg,
         f"In one concise sentence, describe what this {feature_name} "
         f"{'endpoint' if node.is_route else 'function'} does. "
         f"Name: {node.name}. Respond with only the sentence.",
+        mode=mode,
     )
     if text:
         return text.strip().splitlines()[0]
@@ -189,8 +194,13 @@ def render_tier2(
     changes: list[Change],
     existing_doc: str = "",
     cfg=None,
+    mode: str = llm.INCREMENTAL,
 ) -> DocEdit:
-    """Assemble the feature's Tier-2 doc. Diagrams grounded; prose optional."""
+    """Assemble the feature's Tier-2 doc. Diagrams grounded; prose optional.
+
+    `mode` is forwarded to the LLM helper: "backfill" keeps generation on
+    the local model only; "incremental" uses Gemini.
+    """
     public = _public_symbols(graph)
     internals = _key_internals(graph, public)
     diagrams = render_diagrams(graph)
@@ -208,7 +218,7 @@ def render_tier2(
         for r in sorted(routes, key=lambda n: (n.route_path or "", n.http_method or "")):
             out.append(f"### {r.http_method} {r.route_path}")
             out.append("")
-            out.append(_describe(cfg, display_name, r))
+            out.append(_describe(cfg, display_name, r, mode))
             out.append("")
 
     if funcs:
@@ -217,7 +227,7 @@ def render_tier2(
         for f in sorted(funcs, key=lambda n: n.name):
             out.append(f"### `{f.name}`")
             out.append("")
-            out.append(_describe(cfg, display_name, f))
+            out.append(_describe(cfg, display_name, f, mode))
             out.append("")
 
     if internals:

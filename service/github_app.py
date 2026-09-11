@@ -52,3 +52,27 @@ def repo_for_installation(
     """Return (authenticated repo, token) for `owner/name`."""
     gh, token = client_for_installation(app_id, private_key, installation_id)
     return gh.get_repo(full_name), token
+
+
+def list_installed_repos(app_id: str, private_key: str) -> list[dict]:
+    """Every repo the App is installed on, across all installations.
+
+    Returns [{full_name, installation_id, default_branch}]. Best-effort:
+    raises GitHubAppError on total failure so the caller can surface it.
+    """
+    integ = _integration(app_id, private_key)
+    out: list[dict] = []
+    try:
+        for inst in integ.get_installations():
+            gh, _ = client_for_installation(app_id, private_key, inst.id)
+            for repo in inst.get_repos():
+                out.append(
+                    {
+                        "full_name": repo.full_name,
+                        "installation_id": inst.id,
+                        "default_branch": repo.default_branch,
+                    }
+                )
+    except Exception as e:  # pragma: no cover - network dependent
+        raise GitHubAppError(f"could not list installed repos: {e}") from e
+    return out

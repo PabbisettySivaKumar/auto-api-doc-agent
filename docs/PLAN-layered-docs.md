@@ -80,6 +80,29 @@ proven on one repo.
 - **Deployment steps NOT yet applied** (awaiting approval): subscribe the App
   to `pull_request` events, set `DOC_MODE=layered` on Render. See SETUP.md.
 
+### Phase F — Backfill old repos (local model) ✅ BUILT
+- Problem: incremental flow only documents *changes*; old untouched repos get
+  nothing. Backfill documents a repo's **whole current API surface**.
+- **Routing rule:** old repo (no `docs/API.md`) → **local model (Ollama)**;
+  new PRs/pushes → **Gemini**. Enforced structurally, not by a toggle.
+- `agent/llm.py`: mode routing — `backfill` → Ollama (stdlib urllib) →
+  stub fallback, **no Gemini branch**; `incremental` → Gemini. Test proves
+  backfill makes 0 Gemini calls.
+- `agent/backfill.py`: `collect_source_files`, `run_backfill` (whole repo →
+  `features.bucket_files` → per-feature call graph → two-tier docs,
+  `mode=backfill`), symbol cap guard, `deliver_backfill_pr` (one PR to the
+  default branch via `pr.open_pr`).
+- `backfill_app.py`: LOCAL FastAPI (run on the Mac next to Ollama, separate
+  from the deployed service — no Gemini surface). `/docs` dropdown of the
+  App's installed repos (via `github_app.list_installed_repos`); `POST
+  /backfill` clones + documents + opens the PR. Docs-absent guard (force to
+  re-run).
+- `config.py`: `OLLAMA_HOST`, `OLLAMA_MODEL`, `BACKFILL_SYMBOL_CAP`.
+- `tests/test_backfill.py` — incl. the local-only safety proof; all pass.
+- LiteLLM considered, deferred: providers are cleanly path-separated
+  (backfill=local/Mac, incremental=Gemini/Render), so a unified layer adds a
+  heavy dep for no benefit now. Revisit for retries/backoff/cost-tracking.
+
 ### Phase E — Eval, docs, rollout
 - Eval: feature-bucketing cases + golden two-tier outputs (Tier-1 entry +
   Tier-2 sections + valid diagram for a known PR).

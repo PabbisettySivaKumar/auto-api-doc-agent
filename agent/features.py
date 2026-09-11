@@ -119,3 +119,13 @@ def bucket_changes(
         feature = resolve_feature(c.file, source_root) if c.file else CORE_SHARED
         buckets.setdefault(feature, []).append(c)
     return buckets
+
+
+def bucket_files(
+    paths: list[str], source_root: str = ""
+) -> dict[str, list[str]]:
+    """Group file paths by feature slug (for whole-repo backfill)."""
+    buckets: dict[str, list[str]] = {}
+    for p in paths:
+        buckets.setdefault(resolve_feature(p, source_root), []).append(p)
+    return buckets
