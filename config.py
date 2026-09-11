@@ -59,6 +59,15 @@ class Config:
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
     rag_force: bool = os.getenv("RAG_FORCE", "").lower() in {"1", "true", "yes"}
 
+    # --- Layered docs (Phase D) ---
+    # "single": current behavior (push -> one API.md sync PR).
+    # "layered": also handle pull_request events, generating two-tier feature
+    #   docs committed onto the feature branch. Kept off by default until
+    #   proven on one repo.
+    doc_mode: str = os.getenv("DOC_MODE", "single")
+    # Directory prefix stripped before resolving a feature (e.g. "src").
+    source_root: str = os.getenv("SOURCE_ROOT", "")
+
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)

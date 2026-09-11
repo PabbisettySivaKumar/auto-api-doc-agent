@@ -95,6 +95,43 @@ def open_pr(
     return pr.html_url
 
 
+# Marker placed in the agent's own commit messages. The webhook loop-guard
+# checks for it (belt-and-suspenders alongside the committer-identity check)
+# so the agent's doc commit never re-triggers itself.
+SKIP_MARKER = "[skip-doc-sync]"
+
+
+def commit_to_branch(repo, branch: str, edits, message: str) -> str | None:
+    """Commit doc edits directly onto an existing branch (the feature PR
+    branch). Skips files whose content is already up to date so we don't
+    create empty commits (and needless re-triggers). Returns the new commit
+    SHA, or None if nothing changed.
+
+    The commit message carries SKIP_MARKER for the loop-guard.
+    """
+    full_message = f"{message} {SKIP_MARKER}"
+    changed = False
+    last_sha: str | None = None
+
+    for e in edits:
+        try:
+            existing = repo.get_contents(e.path, ref=branch)
+            if existing.decoded_content.decode() == e.updated_content:
+                continue  # already up to date — skip to avoid empty churn
+            res = repo.update_file(
+                e.path, full_message, e.updated_content, existing.sha, branch=branch
+            )
+        except Exception:
+            res = repo.create_file(
+                e.path, full_message, e.updated_content, branch=branch
+            )
+        changed = True
+        commit = res.get("commit") if isinstance(res, dict) else None
+        last_sha = getattr(commit, "sha", None) if commit else None
+
+    return last_sha if changed else None
+
+
 def deliver_pr(
     cfg, draft: DraftResult, check: CheckResult, confidence: float
 ) -> str:

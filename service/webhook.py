@@ -71,6 +71,61 @@ def _process_push(payload: dict) -> None:
         logger.exception("pipeline failed for %s", full_name)
 
 
+def _process_pr(payload: dict) -> None:
+    """Background worker: run the layered-docs pipeline for one PR event."""
+    repo = payload.get("repository", {})
+    pr_data = payload.get("pull_request", {})
+    full_name = repo.get("full_name")
+    installation_id = payload.get("installation", {}).get("id")
+
+    try:
+        result = pipeline.run_for_pr(
+            config,
+            installation_id=installation_id,
+            full_name=full_name,
+            pr_number=pr_data.get("number"),
+            head_branch=pr_data.get("head", {}).get("ref"),
+            base_branch=pr_data.get("base", {}).get("ref"),
+        )
+        logger.info(
+            "processed PR %s#%s -> %s",
+            full_name,
+            pr_data.get("number"),
+            result.get("delivery", result.get("result")),
+        )
+    except Exception:
+        logger.exception("PR pipeline failed for %s", full_name)
+
+
+def _handle_pull_request(payload: dict, background_tasks: BackgroundTasks) -> Response:
+    """Route a pull_request event to the layered-docs pipeline (Phase D)."""
+    if config.doc_mode != "layered":
+        return Response(status_code=202, content="ignored: DOC_MODE != layered")
+
+    action = payload.get("action")
+    if action not in {"opened", "synchronize", "reopened"}:
+        return Response(status_code=202, content=f"ignored PR action: {action}")
+
+    # Loop-guard: our own doc commit fires a 'synchronize' whose sender is the
+    # App bot. Ignore bot-originated events so the agent never re-triggers.
+    if payload.get("sender", {}).get("type") == "Bot":
+        return Response(status_code=202, content="ignored: bot-originated (loop-guard)")
+
+    repo = payload.get("repository", {})
+    pr_data = payload.get("pull_request", {})
+
+    # Fork-guard: we can only commit docs onto branches in this repo.
+    head_repo = (pr_data.get("head", {}).get("repo") or {}).get("full_name")
+    if head_repo and head_repo != repo.get("full_name"):
+        return Response(status_code=202, content="ignored: PR from a fork")
+
+    if not payload.get("installation", {}).get("id"):
+        return Response(status_code=400, content="missing installation id")
+
+    background_tasks.add_task(_process_pr, payload)
+    return Response(status_code=202, content="accepted (pr)")
+
+
 @app.post("/webhook")
 async def webhook(
     request: Request,
@@ -90,9 +145,11 @@ async def webhook(
     if x_github_event == "ping":
         return Response(status_code=200, content="pong")
 
+    if x_github_event == "pull_request":
+        return _handle_pull_request(payload, background_tasks)
+
     if x_github_event != "push":
-        # Acknowledge other events (installation, pull_request, ...) so
-        # GitHub doesn't retry; we only act on pushes for now.
+        # Acknowledge other events (installation, ...) so GitHub doesn't retry.
         return Response(status_code=202, content=f"ignored event: {x_github_event}")
 
     repo = payload.get("repository", {})

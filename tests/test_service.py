@@ -114,8 +114,114 @@ def test_webhook_endpoint() -> None:
     print("PASS test_webhook_endpoint")
 
 
+def test_pull_request_layered() -> None:
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        print("SKIP test_pull_request_layered (fastapi not installed)")
+        return
+
+    import config as config_mod
+
+    object.__setattr__(config_mod.config, "github_webhook_secret", SECRET)
+    object.__setattr__(config_mod.config, "doc_mode", "layered")
+
+    from service import pipeline
+
+    pr_calls = []
+    pipeline.run_for_pr = lambda *a, **k: pr_calls.append((a, k)) or {"delivery": "stub"}
+
+    from service.webhook import app
+
+    client = TestClient(app)
+
+    def pr_payload(action="opened", sender_type="User", head_repo="octo/repo"):
+        return {
+            "action": action,
+            "sender": {"type": sender_type},
+            "repository": {"full_name": "octo/repo", "default_branch": "main"},
+            "installation": {"id": 123},
+            "pull_request": {
+                "number": 7,
+                "head": {"ref": "feature-x", "repo": {"full_name": head_repo}},
+                "base": {"ref": "main"},
+            },
+        }
+
+    def post(payload):
+        body = json.dumps(payload).encode()
+        return client.post(
+            "/webhook",
+            content=body,
+            headers={
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": security.compute_signature(SECRET, body),
+            },
+        )
+
+    # Opened by a human -> dispatched.
+    r = post(pr_payload("opened"))
+    assert r.status_code == 202, (r.status_code, r.text)
+    assert len(pr_calls) == 1 and pr_calls[0][1]["pr_number"] == 7
+
+    # synchronize -> dispatched too.
+    r = post(pr_payload("synchronize"))
+    assert r.status_code == 202 and len(pr_calls) == 2
+
+    # Loop-guard: bot-originated event -> ignored, pipeline NOT called.
+    r = post(pr_payload("synchronize", sender_type="Bot"))
+    assert r.status_code == 202 and "loop-guard" in r.text
+    assert len(pr_calls) == 2
+
+    # Fork PR -> ignored.
+    r = post(pr_payload("opened", head_repo="fork/repo"))
+    assert r.status_code == 202 and "fork" in r.text
+    assert len(pr_calls) == 2
+
+    # Irrelevant action -> ignored.
+    r = post(pr_payload("closed"))
+    assert r.status_code == 202 and "ignored PR action" in r.text
+    assert len(pr_calls) == 2
+
+    print("PASS test_pull_request_layered")
+
+
+def test_pull_request_ignored_in_single_mode() -> None:
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        print("SKIP test_pull_request_ignored_in_single_mode (fastapi not installed)")
+        return
+
+    import config as config_mod
+
+    object.__setattr__(config_mod.config, "github_webhook_secret", SECRET)
+    object.__setattr__(config_mod.config, "doc_mode", "single")
+
+    from service.webhook import app
+
+    client = TestClient(app)
+    payload = {"action": "opened", "sender": {"type": "User"},
+               "repository": {"full_name": "octo/repo"}, "installation": {"id": 1},
+               "pull_request": {"number": 1, "head": {"ref": "f", "repo": {"full_name": "octo/repo"}},
+                                "base": {"ref": "main"}}}
+    body = json.dumps(payload).encode()
+    r = client.post(
+        "/webhook",
+        content=body,
+        headers={
+            "X-GitHub-Event": "pull_request",
+            "X-Hub-Signature-256": security.compute_signature(SECRET, body),
+        },
+    )
+    assert r.status_code == 202 and "DOC_MODE != layered" in r.text
+    print("PASS test_pull_request_ignored_in_single_mode")
+
+
 if __name__ == "__main__":
     test_signature_roundtrip()
     test_zero_sha()
     test_webhook_endpoint()
+    test_pull_request_ignored_in_single_mode()
+    test_pull_request_layered()
     print("\nAll service tests passed.")

@@ -63,16 +63,22 @@ proven on one repo.
   of the feature entry in `docs/API.md` linking to the Tier-2 file).
 - `tests/test_docwriter.py` — all pass; no regressions across the suite.
 
-### Phase D — PR-event trigger + loop-guard (live GitHub)
-- Subscribe the App to `pull_request` (opened/synchronize/reopened) — App
-  settings change, documented in `deploy/SETUP.md`.
-- `service/webhook.py`: handle `pull_request` alongside `push`.
-- **Loop-guard:** ignore commits authored by the app (identity check or a
-  `[skip-doc-sync]` marker in the agent's commit message).
-- `service/pipeline.py`: `run_for_pr(...)` → diff base…head → bucket (A) →
-  call-graph (B) → write both tiers (C) → `pr.commit_to_branch(...)`.
-- Keep `run_for_push` as the safety net.
-- Extend `tests/test_service.py` (pull_request dispatch; loop-guard).
+### Phase D — PR-event trigger + loop-guard ✅ BUILT (deployment pending approval)
+- `service/webhook.py`: handles `pull_request` (opened/synchronize/reopened)
+  alongside `push`; **loop-guard** ignores bot-originated events (sender.type
+  == "Bot"); **fork-guard** skips PRs from forks (can't push to their branch);
+  gated by `DOC_MODE` (only active when `layered`).
+- `service/pipeline.py`: `run_for_pr(...)` clones the head branch → diff
+  `origin/base..head` → bucket (A) → per-feature call-graph (B) → two-tier
+  docs (C) → `pr.commit_to_branch(...)` onto the feature branch.
+- `agent/pr.py`: `commit_to_branch` with `SKIP_MARKER` in the commit message;
+  skips files already up to date (no empty commits / re-triggers).
+- `config.py`: `DOC_MODE` (default `single`), `SOURCE_ROOT`.
+- `run_for_push` kept as the safety net.
+- `tests/test_service.py` extended (PR dispatch, loop-guard, fork-guard,
+  action filter, single-mode ignore) — all pass; no regressions.
+- **Deployment steps NOT yet applied** (awaiting approval): subscribe the App
+  to `pull_request` events, set `DOC_MODE=layered` on Render. See SETUP.md.
 
 ### Phase E — Eval, docs, rollout
 - Eval: feature-bucketing cases + golden two-tier outputs (Tier-1 entry +

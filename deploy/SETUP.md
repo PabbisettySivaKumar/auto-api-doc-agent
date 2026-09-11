@@ -123,6 +123,32 @@ gives you uptime alerts for free.
 Either is enough; UptimeRobot is the most reliable because GitHub cron can
 drift. Both together is belt-and-suspenders and still free.
 
+## 6. Enable layered feature docs (optional — Phase D)
+
+By default the service runs in `DOC_MODE=single` (push to default branch →
+one `API.md` sync PR). To turn on the **two-tier feature docs that commit
+onto the feature PR branch** (see `docs/PLAN-layered-docs.md`):
+
+1. **Subscribe the App to Pull request events:** GitHub App settings →
+   **Permissions & events** → under *Subscribe to events*, check
+   **Pull request** (keep Push). Save. (Contents + Pull requests write
+   permissions are already set from step 2.)
+2. **Set `DOC_MODE=layered`** on the Render service (Environment) and save →
+   it redeploys.
+3. (Optional) `SOURCE_ROOT=src` if your code lives under a `src/` dir, so
+   features resolve to the folder *below* it.
+
+Behavior once enabled: on a PR opened/updated, the agent diffs `base..head`,
+buckets changes by top-level folder (feature), and commits
+`docs/features/<feature>.md` + an updated `docs/API.md` index **onto the PR
+branch** — so docs merge with the feature. A loop-guard ignores the agent's
+own (bot) commits; PRs from forks are skipped. The push-to-main trigger
+stays active as a safety net.
+
+**Recommended rollout:** enable on ONE test repo first (install the App on
+just that repo, or use a throwaway), confirm the doc commit appears on a PR,
+then widen. Roll back anytime by setting `DOC_MODE=single`.
+
 ## Notes
 
 - Low-confidence runs (below `CONFIDENCE_THRESHOLD`) are logged but do
