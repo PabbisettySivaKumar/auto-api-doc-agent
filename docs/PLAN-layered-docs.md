@@ -46,10 +46,12 @@ proven on one repo.
 - Stamp `Change.file` in `detect.detect_changes` so bucketing knows the folder.
 - `tests/test_features.py` — all pass; no regressions in eval/detect/service.
 
-### Phase B — Call-graph extraction (grounds diagrams)
+### Phase B — Call-graph extraction (grounds diagrams) ✅ DONE
 - New `agent/callgraph.py`: Python `ast` who-calls-whom; JS/TS heuristic;
-  `endpoint_flow(route)`, `is_branchy(func)`.
-- `tests/test_callgraph.py`.
+  `build_call_graph`, `endpoint_flow(route)` (depth-limited, cycle-guarded,
+  skips unresolved/library calls), `is_branchy(func)`.
+- `tests/test_callgraph.py` — all pass (grounded layering, branch counts,
+  cycle guard, JS/TS); no regressions.
 
 ### Phase C — Two-tier doc writer
 - New `agent/docwriter.py` (reuses `draft.py`'s Gemini/stub client):
