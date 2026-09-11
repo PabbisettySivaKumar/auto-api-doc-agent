@@ -53,12 +53,15 @@ proven on one repo.
 - `tests/test_callgraph.py` — all pass (grounded layering, branch counts,
   cycle guard, JS/TS); no regressions.
 
-### Phase C — Two-tier doc writer
-- New `agent/docwriter.py` (reuses `draft.py`'s Gemini/stub client):
-  `render_tier2` (targeted edit; mark removed = Deprecated),
-  `render_diagrams` (mermaid; validate syntax, drop diagram on parse fail),
-  `update_tier1` (upsert entry in `docs/API.md` linking to the Tier-2 file).
-- `tests/test_docwriter.py`.
+### Phase C — Two-tier doc writer ✅ DONE
+- New `agent/docwriter.py` + `agent/llm.py` (shared Gemini/stub text helper):
+  `render_tier2` (public surface + one level of key internals; mark removed =
+  Deprecated, carries forward prior deprecations), `render_diagrams`
+  (**diagrams generated deterministically from the call graph, not the LLM** —
+  sequence per non-trivial endpoint, flowchart per branchy orchestration
+  function; `validate_mermaid` safety net), `update_tier1` (idempotent upsert
+  of the feature entry in `docs/API.md` linking to the Tier-2 file).
+- `tests/test_docwriter.py` — all pass; no regressions across the suite.
 
 ### Phase D — PR-event trigger + loop-guard (live GitHub)
 - Subscribe the App to `pull_request` (opened/synchronize/reopened) — App
