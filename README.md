@@ -7,26 +7,41 @@ auto-commit to `main`.
 
 ## Status — complete & live
 
-The full PRD is built, deployed, and verified end-to-end on real pushes.
+Built, deployed, and verified end-to-end on real repos.
 
-| PRD Phase | Scope | Status |
+| Capability | What it does | Status |
 |---|---|---|
-| Phase 1 | MVP agent core (single language, in-repo docs) | ✅ |
-| Phase 2 | Structured logging + scored eval suite | ✅ |
-| Phase 3 | RAG for scattered/external docs (LangGraph deferred) | ✅ |
-| Phase 4 | Multi-language (Python + JS/TS) | ✅ |
-| — | AI Studio → Vertex AI migration | ⬜ intentionally skipped (stays on AI Studio) |
+| **Incremental sync** | On a change, propose targeted doc edits via PR | ✅ live |
+| **All-repos service** | One GitHub App + FastAPI service, no per-repo file | ✅ on Render (free) |
+| **Multi-language** | Python (`ast`) + JavaScript/TypeScript (heuristic) | ✅ |
+| **RAG** | Semantic retrieval for scattered/external docs | ✅ |
+| **Layered docs** | Two-tier: API index + per-feature deep-dives with grounded mermaid diagrams, committed onto the PR branch | ✅ built |
+| **Backfill** | Document an *old* repo's whole API surface with a **local model** | ✅ verified |
 
-- **Deployed:** always-on GitHub App + FastAPI service on Render (free
-  plan), installed across all repos.
-- **Live-verified:** opened & merged real doc-sync PRs for both a **Python**
-  and a **JavaScript** repo (`model: gemini`, confidence 1.00).
-- **Quality gate:** eval suite at **18/18 cases, recall 100%** (target 90%).
-- **Zero-cost, zero heavy deps:** no paid services, no numpy/Chroma/tree-sitter.
+- **Live-verified:** doc-sync PRs merged on a **Python** and a **JavaScript**
+  repo; whole-repo **backfill** run on two real repos, generated entirely by a
+  **local model** (no code left the machine).
+- **Quality gate:** detection eval **18/18, recall 100%** (target 90%), plus a
+  golden two-tier output test.
+- **Zero-cost, minimal deps:** free hosting; local model for bulk work; no
+  numpy/Chroma/tree-sitter.
+
+### Two model paths (by design, never crossed)
+| Situation | Model | Runs on |
+|---|---|---|
+| **Old repo, no `docs/API.md`** → backfill | **Local (Ollama)** | your Mac |
+| **New PR / push, docs exist** → incremental | **Gemini** | Render service |
+
+The backfill path has **no Gemini branch at all** (falls back to a stub, never
+the cloud), so old repos can't be sent to Gemini by accident.
 
 **Languages:** Python (`ast`) and JavaScript/TypeScript (heuristic).
-**Docs:** Markdown + OpenAPI, in-repo or external (RAG).
-**Delivery:** run locally, or as an always-on GitHub App across all repos.
+**Docs:** Markdown + OpenAPI, in-repo or external (RAG); plus layered feature docs.
+**Delivery:** run locally, an always-on GitHub App across repos, or the local
+backfill app.
+
+See [`docs/PLAN-layered-docs.md`](docs/PLAN-layered-docs.md) for the layered-docs
+design and [`deploy/SETUP.md`](deploy/SETUP.md) for deployment + backfill steps.
 
 ## Pipeline
 
@@ -43,9 +58,18 @@ diff → detect API changes (Python ast / JS-TS) → retrieve relevant docs (dir
 | `agent/retrieve.py` | Find Markdown / OpenAPI docs that reference changed symbols |
 | `agent/draft.py` | Draft minimal doc edits with Gemini (stub fallback if no key) |
 | `agent/selfcheck.py` | Ground the edits against the code; adjust confidence |
-| `agent/pr.py` | Open a PR (or write a dry-run under `out/`) |
+| `agent/pr.py` | Open a PR / commit onto a branch (or dry-run under `out/`) |
 | `agent/log.py` | Append a JSON-lines trajectory per run |
-| `run_local.py` | Orchestrator wiring it all together |
+| `agent/rag.py` | Semantic retrieval for scattered/external docs |
+| `agent/features.py` | Resolve + bucket changes/files by feature (folder) |
+| `agent/callgraph.py` | Extract who-calls-whom (grounds diagrams) |
+| `agent/docwriter.py` | Two-tier docs + grounded mermaid diagrams |
+| `agent/backfill.py` | Whole-repo backfill (local model) → one PR |
+| `agent/llm.py` | Provider routing: backfill→local, incremental→Gemini |
+| `service/webhook.py` | GitHub App webhook: push + pull_request (layered) |
+| `service/pipeline.py` | Clone → run core → deliver, for push and PR events |
+| `run_local.py` | Local orchestrator wiring it all together |
+| `backfill_app.py` | Local app with a repo dropdown for backfilling old repos |
 
 ## Quick start (no setup — stub mode)
 
@@ -118,10 +142,15 @@ Full deployment + GitHub App creation/installation steps are in
 ## Tests & eval
 
 ```bash
-python3 tests/test_service.py     # webhook signature + dispatch
-python3 tests/test_rag.py         # RAG retrieval (offline, deterministic)
-python3 tests/test_detect_js.py   # JS/TS detector
-python3 run_eval.py               # 18-case accuracy scorecard (exit != 0 below target)
+python3 tests/test_service.py       # webhook: push + pull_request, loop/fork guards
+python3 tests/test_rag.py           # RAG retrieval (offline, deterministic)
+python3 tests/test_detect_js.py     # JS/TS detector
+python3 tests/test_features.py      # feature bucketing
+python3 tests/test_callgraph.py     # call-graph extraction
+python3 tests/test_docwriter.py     # two-tier writer + diagrams
+python3 tests/test_golden_docs.py   # golden end-to-end two-tier output
+python3 tests/test_backfill.py      # backfill + local-only safety proof
+python3 run_eval.py                 # 18-case accuracy scorecard (exit != 0 below target)
 ```
 
 ## Eval suite (PRD Phase 2)

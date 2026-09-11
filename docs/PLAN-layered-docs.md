@@ -103,11 +103,17 @@ proven on one repo.
   (backfill=local/Mac, incremental=Gemini/Render), so a unified layer adds a
   heavy dep for no benefit now. Revisit for retries/backoff/cost-tracking.
 
-### Phase E — Eval, docs, rollout
-- Eval: feature-bucketing cases + golden two-tier outputs (Tier-1 entry +
-  Tier-2 sections + valid diagram for a known PR).
-- Update `README.md`, `docs/API.md`, `deploy/SETUP.md`, `docs/ORCHESTRATION.md`.
-- Flip `DOC_MODE` to `layered` after a one-repo test.
+### Phase E — Eval, docs, rollout ✅ DONE
+- `tests/test_golden_docs.py`: golden end-to-end two-tier output (Tier-2
+  sections, key internals, grounded diagram count, deprecation, Tier-1
+  index links) + feature bucketing. Runs offline.
+- README refreshed for the full system (incremental + layered + backfill +
+  local/cloud routing + module map + test list).
+- `DOC_MODE=layered` already live on Render; backfill verified on two real
+  repos. Remaining rollout step (user-side): subscribe the App to Pull
+  request events to exercise the incremental layered flow.
+
+**All layered-docs phases (A–F) complete.**
 
 ## Risks
 
