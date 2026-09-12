@@ -140,6 +140,25 @@ def test_tier1_upsert_idempotent() -> None:
     print("PASS test_tier1_upsert_idempotent")
 
 
+def test_signatures_rendered() -> None:
+    """Endpoint/function signatures (params) appear in the Tier-2 doc, so a
+    param change is visible."""
+    src = (
+        "from fastapi import FastAPI\napp = FastAPI()\n"
+        "@app.get('/health')\n"
+        "def health_check(verbose: bool = False) -> dict:\n    return {}\n"
+        "def compute(a: int, b: int) -> int:\n    return a + b\n"
+    )
+    g = callgraph.build_call_graph({"app/api.py": src})
+    doc = docwriter.render_tier2("app", "App", g, [], "", None).updated_content
+    assert "`health_check(verbose: bool = False) -> dict`" in doc, doc
+    assert "`compute(a: int, b: int) -> int`" in doc
+    # Description parser still finds the description, not the signature line.
+    m = docwriter._parse_existing_descriptions(doc)
+    assert "GET /health" in m and not m["GET /health"].startswith("`"), m.get("GET /health")
+    print("PASS test_signatures_rendered")
+
+
 def test_parse_existing_descriptions() -> None:
     doc = (
         "# App\n\n## Endpoints\n\n"
@@ -197,6 +216,7 @@ if __name__ == "__main__":
     test_tier2_marks_removed_as_deprecated()
     test_tier2_carries_forward_deprecations()
     test_tier1_upsert_idempotent()
+    test_signatures_rendered()
     test_parse_existing_descriptions()
     test_description_reuse_skips_model()
     print("\nAll doc-writer tests passed.")

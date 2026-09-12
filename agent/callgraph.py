@@ -25,6 +25,8 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from . import detect
+
 
 @dataclass
 class FuncNode:
@@ -36,6 +38,7 @@ class FuncNode:
     calls: list[str] = field(default_factory=list)  # callee simple names, in order
     branch_points: int = 0
     lineno: int = 0
+    signature: str = ""  # e.g. "(user_id: int, verbose: bool = False) -> dict"
 
     @property
     def simple(self) -> str:
@@ -137,6 +140,7 @@ def _py_functions(tree: ast.AST, file: str, graph: CallGraph) -> None:
                     calls=_collect_calls(child),
                     branch_points=_count_branches(child),
                     lineno=getattr(child, "lineno", 0),
+                    signature=detect._format_signature(child),
                 )
                 graph.add(fn)
             elif isinstance(child, ast.ClassDef):
@@ -151,11 +155,11 @@ def _py_functions(tree: ast.AST, file: str, graph: CallGraph) -> None:
 
 _JS_FUNC_RE = re.compile(
     r"(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*"
-    r"([A-Za-z_$][\w$]*)\s*\([^)]*\)"
+    r"([A-Za-z_$][\w$]*)\s*(\([^)]*\))"
 )
 _JS_ARROW_RE = re.compile(
     r"(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*"
-    r"(?::\s*[^=]+?)?=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*[^=>{]+?)?=>"
+    r"(?::\s*[^=]+?)?=\s*(?:async\s*)?(\([^)]*\))\s*(?::\s*[^=>{]+?)?=>"
 )
 _JS_ROUTE_RE = re.compile(
     r"\b(?:app|router|api)\s*\.\s*(" + "|".join(_HTTP_METHODS) + r")\s*"
@@ -186,6 +190,10 @@ def _js_body_after(source: str, start: int) -> str:
     return source[open_idx + 1 :]
 
 
+def _norm_sig(params: str) -> str:
+    return "(" + " ".join(params.strip("()").split()) + ")"
+
+
 def _js_functions(source: str, file: str, graph: CallGraph) -> None:
     def body_stats(body: str) -> tuple[list[str], int]:
         calls = [
@@ -200,14 +208,16 @@ def _js_functions(source: str, file: str, graph: CallGraph) -> None:
         body = _js_body_after(source, m.end())
         calls, branches = body_stats(body)
         graph.add(
-            FuncNode(name=m.group(1), file=file, calls=calls, branch_points=branches)
+            FuncNode(name=m.group(1), file=file, calls=calls,
+                     branch_points=branches, signature=_norm_sig(m.group(2)))
         )
 
     for m in _JS_ARROW_RE.finditer(source):
         body = _js_body_after(source, m.end())
         calls, branches = body_stats(body)
         graph.add(
-            FuncNode(name=m.group(1), file=file, calls=calls, branch_points=branches)
+            FuncNode(name=m.group(1), file=file, calls=calls,
+                     branch_points=branches, signature=_norm_sig(m.group(2)))
         )
 
     for m in _JS_ROUTE_RE.finditer(source):

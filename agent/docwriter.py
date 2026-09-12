@@ -195,10 +195,14 @@ def _parse_existing_descriptions(existing_doc: str) -> dict[str, str]:
         line = lines[i]
         if line.startswith("### "):
             heading = line[4:].strip()
-            # First non-empty, non-heading line below is the description.
             j = i + 1
             while j < len(lines) and not lines[j].strip():
                 j += 1
+            # Skip a signature line (whole-line inline code) if present.
+            if j < len(lines) and re.match(r"^`[^`]+`$", lines[j].strip()):
+                j += 1
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
             if j < len(lines) and not lines[j].startswith("#") and not lines[j].startswith("```"):
                 descriptions[heading] = lines[j].strip()
             i = j
@@ -261,6 +265,11 @@ def render_tier2(
     out.append(f"_Auto-generated feature documentation for `{feature}/`._")
     out.append("")
 
+    def signature_line(node: FuncNode) -> str | None:
+        if not node.signature:
+            return None
+        return f"`{node.name}{node.signature}`"
+
     if routes:
         out.append("## Endpoints")
         out.append("")
@@ -268,6 +277,10 @@ def render_tier2(
             heading = f"{r.http_method} {r.route_path}"
             out.append(f"### {heading}")
             out.append("")
+            sig = signature_line(r)
+            if sig:
+                out.append(sig)
+                out.append("")
             out.append(describe(r, heading))
             out.append("")
 
@@ -278,6 +291,10 @@ def render_tier2(
             heading = f"`{f.name}`"
             out.append(f"### {heading}")
             out.append("")
+            sig = signature_line(f)
+            if sig:
+                out.append(sig)
+                out.append("")
             out.append(describe(f, heading))
             out.append("")
 
