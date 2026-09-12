@@ -173,6 +173,40 @@ def _describe(cfg, feature_name: str, node: FuncNode, mode: str = llm.INCREMENTA
     return f"`{node.simple}()` — see source for details."
 
 
+def _node_key(node: FuncNode) -> str:
+    """Match detect.Symbol.key so we can cross-reference with `changes`."""
+    if node.is_route:
+        return f"route {node.http_method} {node.route_path}"
+    return f"func {node.name}"
+
+
+def _parse_existing_descriptions(existing_doc: str) -> dict[str, str]:
+    """Map a symbol's heading text -> its existing description line.
+
+    Headings look like `### GET /health` (endpoints) or `` ### `name` ``
+    (functions); the description is the first non-empty line beneath.
+    Lets the incremental path REUSE prose for unchanged symbols instead of
+    re-calling the model for every symbol on every PR.
+    """
+    descriptions: dict[str, str] = {}
+    lines = existing_doc.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("### "):
+            heading = line[4:].strip()
+            # First non-empty, non-heading line below is the description.
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j < len(lines) and not lines[j].startswith("#") and not lines[j].startswith("```"):
+                descriptions[heading] = lines[j].strip()
+            i = j
+        else:
+            i += 1
+    return descriptions
+
+
 def _existing_deprecated(existing_doc: str) -> list[str]:
     """Carry forward any previously-recorded deprecated lines."""
     if _DEPRECATED_HEADING not in existing_doc:
@@ -208,6 +242,21 @@ def render_tier2(
     routes = [n for n in public if n.is_route]
     funcs = [n for n in public if not n.is_route]
 
+    # Reuse prose for symbols that already have a description AND didn't change
+    # in this PR — only new/changed symbols hit the model. Big cost/latency win
+    # on incremental runs (was: one model call per symbol, every PR).
+    prior = _parse_existing_descriptions(existing_doc)
+    changed_keys = {
+        (c.after or c.before).key
+        for c in changes
+        if c.status in {"added", "changed"} and (c.after or c.before)
+    }
+
+    def describe(node: FuncNode, heading: str) -> str:
+        if heading in prior and _node_key(node) not in changed_keys:
+            return prior[heading]  # unchanged symbol → reuse, no model call
+        return _describe(cfg, display_name, node, mode)
+
     out: list[str] = [f"# {display_name}", ""]
     out.append(f"_Auto-generated feature documentation for `{feature}/`._")
     out.append("")
@@ -216,18 +265,20 @@ def render_tier2(
         out.append("## Endpoints")
         out.append("")
         for r in sorted(routes, key=lambda n: (n.route_path or "", n.http_method or "")):
-            out.append(f"### {r.http_method} {r.route_path}")
+            heading = f"{r.http_method} {r.route_path}"
+            out.append(f"### {heading}")
             out.append("")
-            out.append(_describe(cfg, display_name, r, mode))
+            out.append(describe(r, heading))
             out.append("")
 
     if funcs:
         out.append("## Functions")
         out.append("")
         for f in sorted(funcs, key=lambda n: n.name):
-            out.append(f"### `{f.name}`")
+            heading = f"`{f.name}`"
+            out.append(f"### {heading}")
             out.append("")
-            out.append(_describe(cfg, display_name, f, mode))
+            out.append(describe(f, heading))
             out.append("")
 
     if internals:

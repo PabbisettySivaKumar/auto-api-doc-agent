@@ -140,6 +140,55 @@ def test_tier1_upsert_idempotent() -> None:
     print("PASS test_tier1_upsert_idempotent")
 
 
+def test_parse_existing_descriptions() -> None:
+    doc = (
+        "# App\n\n## Endpoints\n\n"
+        "### GET /health\n\nChecks health.\n\n"
+        "### POST /chat\n\nHandles chat.\n\n"
+        "## Functions\n\n### `helper`\n\nDoes a thing.\n"
+    )
+    m = docwriter._parse_existing_descriptions(doc)
+    assert m["GET /health"] == "Checks health."
+    assert m["POST /chat"] == "Handles chat."
+    assert m["`helper`"] == "Does a thing."
+    print("PASS test_parse_existing_descriptions")
+
+
+def test_description_reuse_skips_model() -> None:
+    """Unchanged symbols reuse prior prose (no model call); new/changed ones
+    are described."""
+    g = _graph()  # has GET /users/{user_id}, route_request, get_user_service, etc.
+
+    calls = {"n": 0}
+    import agent.docwriter as dw
+    orig = dw._describe
+    dw._describe = lambda cfg, name, node, mode=None: (calls.__setitem__("n", calls["n"] + 1) or f"NEW {node.simple}")
+
+    try:
+        # Existing doc already describes the GET endpoint and route_request.
+        existing = (
+            "# App\n\n## Endpoints\n\n"
+            "### GET /users/{user_id}\n\nExisting endpoint prose.\n\n"
+            "## Functions\n\n### `route_request`\n\nExisting fn prose.\n"
+        )
+        # A change set marking ONLY route_request as changed.
+        from agent import detect
+        changed = [detect.Change("changed", "func route_request",
+                                 after=detect.Symbol("function", "route_request", "(req)"))]
+        edit = dw.render_tier2("app", "App", g, changed, existing, cfg=None)
+        doc = edit.updated_content
+        # GET endpoint: unchanged + had prior prose -> reused (no model call).
+        assert "Existing endpoint prose." in doc
+        # route_request: marked changed -> re-described (model called), prose replaced.
+        assert "NEW route_request" in doc
+        assert "Existing fn prose." not in doc
+        # get_user_service: no prior prose -> described via model.
+        assert calls["n"] >= 1
+        print("PASS test_description_reuse_skips_model -> model calls:", calls["n"])
+    finally:
+        dw._describe = orig
+
+
 if __name__ == "__main__":
     test_validate_mermaid()
     test_sequence_diagram_grounded()
@@ -148,4 +197,6 @@ if __name__ == "__main__":
     test_tier2_marks_removed_as_deprecated()
     test_tier2_carries_forward_deprecations()
     test_tier1_upsert_idempotent()
+    test_parse_existing_descriptions()
+    test_description_reuse_skips_model()
     print("\nAll doc-writer tests passed.")
