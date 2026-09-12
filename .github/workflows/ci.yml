@@ -1,0 +1,39 @@
+name: ci
+
+# Runs the full test suite + the detection-accuracy eval on every push and
+# PR. run_eval.py exits non-zero if recall falls below the PRD target, so a
+# regression fails CI and blocks the merge.
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt httpx
+
+      - name: Run test suite
+        run: |
+          set -e
+          for t in test_features test_callgraph test_docwriter test_golden_docs \
+                   test_incremental_feature test_pr_commit test_backfill \
+                   test_detect_js test_rag test_service; do
+            echo "=== $t ==="
+            python "tests/$t.py"
+          done
+
+      - name: Run accuracy eval (gates on recall)
+        run: python run_eval.py

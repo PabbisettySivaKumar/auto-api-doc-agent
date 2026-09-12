@@ -153,6 +153,9 @@ python3 tests/test_backfill.py      # backfill + local-only safety proof
 python3 run_eval.py                 # 18-case accuracy scorecard (exit != 0 below target)
 ```
 
+CI (`.github/workflows/ci.yml`) runs all of the above on every push and PR;
+a detection-accuracy regression (recall below target) fails the build.
+
 ## Eval suite (PRD Phase 2)
 
 A labeled test set of "PRs" scores detection accuracy against the PRD
