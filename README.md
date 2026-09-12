@@ -15,8 +15,9 @@ Built, deployed, and verified end-to-end on real repos.
 | **All-repos service** | One GitHub App + FastAPI service, no per-repo file | ✅ on Render (free) |
 | **Multi-language** | Python (`ast`) + JavaScript/TypeScript (heuristic) | ✅ |
 | **RAG** | Semantic retrieval for scattered/external docs | ✅ |
-| **Layered docs** | Two-tier: API index + per-feature deep-dives with grounded mermaid diagrams, committed onto the PR branch | ✅ built |
+| **Layered docs** | Two-tier: API index + per-feature deep-dives with signatures + grounded mermaid diagrams, committed onto the PR branch (one idempotent commit, description reuse) | ✅ live |
 | **Backfill** | Document an *old* repo's whole API surface with a **local model** | ✅ verified |
+| **CI** | Full test suite + accuracy eval on every push/PR, gates on recall | ✅ |
 
 - **Live-verified:** doc-sync PRs merged on a **Python** and a **JavaScript**
   repo; whole-repo **backfill** run on two real repos, generated entirely by a
@@ -113,16 +114,22 @@ future ones) gets doc PRs automatically — no per-repo workflow file.
 Currently deployed on Render's free plan (see `deploy/SETUP.md`).
 
 ```
-Any repo → push → GitHub App → FastAPI service (service/webhook.py)
-        → clone + diff + detect + retrieve + draft + self-check → open doc PR
+Any repo → push / pull_request → GitHub App → FastAPI service (service/webhook.py)
+        → clone + diff + detect + retrieve + draft/docwriter + self-check
+        → open doc PR (push)  or  commit docs onto the PR branch (pull_request, layered)
 ```
+
+The service handles **push** (single-`API.md` sync PR) and, when
+`DOC_MODE=layered`, **pull_request** events (two-tier feature docs committed
+onto the PR branch, loop-guarded). See `deploy/SETUP.md` §6 to enable layered
+mode and §7 for local backfill of old repos.
 
 | Module | Role |
 |---|---|
 | `service/security.py` | Verify GitHub's HMAC-SHA256 webhook signature |
 | `service/github_app.py` | Mint installation tokens; authenticated PyGithub client |
-| `service/pipeline.py` | Clone repo at head, run the core, open the PR |
-| `service/webhook.py` | FastAPI app: verify → dispatch push events in background |
+| `service/pipeline.py` | Clone repo, run the core; `run_for_push` (sync PR) + `run_for_pr` (layered, commits onto PR branch) |
+| `service/webhook.py` | FastAPI app: verify → dispatch push + pull_request in background |
 | `deploy/` | Dockerfile, GitHub App manifest, `SETUP.md` |
 | `render.yaml` | Render free-plan Blueprint (one-click deploy) |
 | `.github/workflows/keep-warm.yml` | Pings `/healthz` every 10 min to beat free-plan cold starts |
@@ -147,8 +154,10 @@ python3 tests/test_rag.py           # RAG retrieval (offline, deterministic)
 python3 tests/test_detect_js.py     # JS/TS detector
 python3 tests/test_features.py      # feature bucketing
 python3 tests/test_callgraph.py     # call-graph extraction
-python3 tests/test_docwriter.py     # two-tier writer + diagrams
+python3 tests/test_docwriter.py     # two-tier writer + diagrams + signatures + reuse
 python3 tests/test_golden_docs.py   # golden end-to-end two-tier output
+python3 tests/test_incremental_feature.py  # PR flow documents the whole feature
+python3 tests/test_pr_commit.py     # single idempotent commit per run
 python3 tests/test_backfill.py      # backfill + local-only safety proof
 python3 run_eval.py                 # 18-case accuracy scorecard (exit != 0 below target)
 ```
