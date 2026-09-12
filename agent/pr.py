@@ -101,35 +101,44 @@ def open_pr(
 SKIP_MARKER = "[skip-doc-sync]"
 
 
+def _current_content(repo, path: str, branch: str) -> str | None:
+    """Content of `path` on `branch`, or None if it doesn't exist."""
+    try:
+        return repo.get_contents(path, ref=branch).decoded_content.decode()
+    except Exception:
+        return None
+
+
 def commit_to_branch(repo, branch: str, edits, message: str) -> str | None:
-    """Commit doc edits directly onto an existing branch (the feature PR
-    branch). Skips files whose content is already up to date so we don't
-    create empty commits (and needless re-triggers). Returns the new commit
-    SHA, or None if nothing changed.
+    """Commit all doc edits onto an existing branch in a SINGLE commit.
+
+    Idempotent: files already matching are skipped, and if nothing changed
+    the function is a no-op (returns None, no empty commit) — which also
+    prevents needless webhook re-triggers. Uses the git tree API so every
+    edit lands in one commit rather than one commit per file.
 
     The commit message carries SKIP_MARKER for the loop-guard.
     """
-    full_message = f"{message} {SKIP_MARKER}"
-    changed = False
-    last_sha: str | None = None
+    from github import InputGitTreeElement
 
-    for e in edits:
-        try:
-            existing = repo.get_contents(e.path, ref=branch)
-            if existing.decoded_content.decode() == e.updated_content:
-                continue  # already up to date — skip to avoid empty churn
-            res = repo.update_file(
-                e.path, full_message, e.updated_content, existing.sha, branch=branch
-            )
-        except Exception:
-            res = repo.create_file(
-                e.path, full_message, e.updated_content, branch=branch
-            )
-        changed = True
-        commit = res.get("commit") if isinstance(res, dict) else None
-        last_sha = getattr(commit, "sha", None) if commit else None
+    # Keep only edits whose content actually differs from the branch.
+    changed = [e for e in edits if _current_content(repo, e.path, branch) != e.updated_content]
+    if not changed:
+        return None  # nothing to do — idempotent no-op
 
-    return last_sha if changed else None
+    ref = repo.get_git_ref(f"heads/{branch}")
+    base_commit = repo.get_git_commit(ref.object.sha)
+
+    elements = [
+        InputGitTreeElement(path=e.path, mode="100644", type="blob", content=e.updated_content)
+        for e in changed
+    ]
+    new_tree = repo.create_git_tree(elements, base_commit.tree)
+    new_commit = repo.create_git_commit(
+        f"{message} {SKIP_MARKER}", new_tree, [base_commit]
+    )
+    ref.edit(new_commit.sha)
+    return new_commit.sha
 
 
 def deliver_pr(
