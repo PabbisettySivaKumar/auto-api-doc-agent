@@ -15,7 +15,7 @@ import tempfile
 from typing import Any
 
 from agent import diff, detect, retrieve, draft, selfcheck, pr, log
-from agent import features, callgraph, docwriter
+from agent import features, callgraph, docwriter, backfill
 from . import github_app
 
 
@@ -104,16 +104,20 @@ def _read(tmp: str, path: str) -> str:
         return ""
 
 
-def _feature_sources(tmp: str, feature: str, changes, source_root: str) -> dict[str, str]:
-    """Current on-disk source of every changed file in this feature, so the
-    call graph reflects the feature's post-change state."""
-    sources: dict[str, str] = {}
-    for c in changes:
-        if not c.file:
-            continue
-        if features.resolve_feature(c.file, source_root) == feature:
-            sources[c.file] = _read(tmp, c.file)
-    return sources
+def _feature_sources(tmp: str, feature: str, source_root: str) -> dict[str, str]:
+    """Current on-disk source of EVERY file in this feature (not only the
+    changed ones).
+
+    The Tier-2 doc is regenerated from this call graph, so it must see the
+    whole feature — otherwise it would document only the changed file and
+    wipe the rest of the feature's endpoints/functions/diagrams.
+    """
+    all_sources = backfill.collect_source_files(tmp)
+    return {
+        path: src
+        for path, src in all_sources.items()
+        if features.resolve_feature(path, source_root) == feature
+    }
 
 
 def run_for_pr(
@@ -161,7 +165,7 @@ def run_for_pr(
 
         for feature, fchanges in buckets.items():
             display = features.feature_display_name(feature, overrides)
-            srcs = _feature_sources(tmp, feature, fchanges, source_root)
+            srcs = _feature_sources(tmp, feature, source_root)
             graph = callgraph.build_call_graph(srcs)
 
             existing_tier2 = _read(tmp, docwriter.tier2_path(feature))
